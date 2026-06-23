@@ -1,0 +1,22 @@
+# AI related stuff
+.codex/
+.agents/
+
+# Python cache and virtualenvs
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+
+# Local generated outputs
+00_outputs/*
+!00_outputs/.keep
