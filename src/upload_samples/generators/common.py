@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from ..models import GeneratorConfig, ManifestEntry
 from ..registry import FamilyRegistry
@@ -25,7 +26,12 @@ def build_entry(
     provenance: dict[str, object] | None = None,
 ) -> ManifestEntry:
     filename = Path(relative_path).name
-    entry_id = filename.rsplit(".", 1)[0].replace("_", "-")
+    entry_id = str(
+        uuid5(
+            NAMESPACE_URL,
+            f"upload-samples:{category}:{relative_path}:{logical_extension}:{generated_content_family}:{sha256_bytes(data)}",
+        )
+    )
     return ManifestEntry(
         id=entry_id,
         category=category,

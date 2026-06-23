@@ -25,6 +25,8 @@ This project intentionally avoids web shells, malware, reverse shells, destructi
 python -m pip install -e ".[dev]"
 python -m upload_samples generate --out out
 python -m upload_samples verify --out out
+python -m upload_samples report-init --out out
+python -m upload_samples report-ui --out out --host 127.0.0.1 --port 8765
 ```
 
 ## Generate selected categories
@@ -49,6 +51,26 @@ out/
   polyglots/
   stress-bounded/
   multipart-recipes/
+  reporting/
+```
+
+## Reporting workflow
+
+The project includes a local reporting workflow for pentesters:
+
+- initialize reporting from the generated corpus
+- fill results in a browser UI
+- autosave progress to SQLite
+- export a standalone HTML report and JSON/Markdown summaries
+
+Commands:
+
+```bash
+python -m upload_samples generate --out out --init-reporting
+python -m upload_samples report-init --out out
+python -m upload_samples report-ui --out out --host 127.0.0.1 --port 8765
+python -m upload_samples report-status --out out
+python -m upload_samples report-export --out out
 ```
 
 ## Core categories

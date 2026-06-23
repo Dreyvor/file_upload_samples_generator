@@ -11,11 +11,15 @@ from PIL import Image
 from ..models import FamilySample
 
 
-MARKERS = [
-    "UPLOAD_SAMPLE_MARKER_001",
-    "UPLOAD_SAMPLE_MARKER_002",
-    '\"><img src=x onerror=alert(1337)>',
-]
+def marker_value(sample_id: str, field: str, index: int = 1) -> str:
+    return f"UPLOAD_SAMPLE_MARKER__{sample_id.upper()}__{field.upper()}__{index:03d}"
+
+
+def reflection_probe(sample_id: str, field: str) -> str:
+    return (
+        '\"><img src=x onerror=alert(1337) '
+        f'data-upload-sample="{sample_id}" data-upload-field="{field}">'
+    )
 
 
 def _png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
@@ -134,19 +138,53 @@ class PdfPlugin(BasePlugin):
 
     def generate_metadata_samples(self) -> list[tuple[str, bytes, str]]:
         return [
-            ("pdf-title-marker.pdf", _pdf_bytes(title=MARKERS[0], subject="metadata marker"), "PDF title metadata marker."),
-            ("pdf-title-reflection-probe.pdf", _pdf_bytes(title=MARKERS[2], subject="reflection probe"), "PDF title reflection probe."),
+            (
+                "pdf-title-marker.pdf",
+                _pdf_bytes(
+                    title=marker_value("pdf-title-marker", "title", 1),
+                    subject=marker_value("pdf-title-marker", "subject", 2),
+                ),
+                "PDF title metadata marker.",
+            ),
+            (
+                "pdf-title-reflection-probe.pdf",
+                _pdf_bytes(
+                    title=reflection_probe("pdf-title-reflection-probe", "title"),
+                    subject=marker_value("pdf-title-reflection-probe", "subject-reflection", 2),
+                ),
+                "PDF title reflection probe.",
+            ),
         ]
 
     def generate_stress_samples(self, max_pixels: int, max_tiff_pages: int) -> list[tuple[str, bytes, str]]:
-        marker_lines = "\\n".join([f"marker {index}" for index in range(100)])
-        return [("many-metadata-fields.pdf", _pdf_bytes(title=MARKERS[0], author=MARKERS[1], subject=marker_lines), "PDF with many benign metadata values.")]
+        marker_lines = "\\n".join(
+            marker_value("pdf-stress", f"subject-line-{index}", index + 1)
+            for index in range(100)
+        )
+        return [
+            (
+                "many-metadata-fields.pdf",
+                _pdf_bytes(
+                    title=marker_value("pdf-many-metadata-fields", "title", 1),
+                    author=marker_value("pdf-many-metadata-fields", "author", 2),
+                    subject=marker_lines,
+                ),
+                "PDF with many benign metadata values.",
+            )
+        ]
 
     def generate_structure_samples(self) -> list[tuple[str, bytes, str]]:
         form_text = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /AcroForm << /Fields [6 0 R] >> /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Annots [6 0 R] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 37 >>\nstream\nBT /F1 12 Tf 36 96 Td (Form field sample) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Tx /T (field1) /Rect [36 36 180 56] >>\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000078 00000 n \n0000000135 00000 n \n0000000274 00000 n \n0000000361 00000 n \n0000000431 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n512\n%%EOF\n"
         return [
             ("pdf-with-form-field.pdf", form_text.encode("utf-8"), "Benign PDF with an AcroForm-like structure."),
-            ("pdf-with-embedded-text-marker.pdf", _pdf_bytes(title="Structure Marker", subject=MARKERS[0]), "PDF carrying an embedded text marker."),
+            (
+                "pdf-with-embedded-text-marker.pdf",
+                _pdf_bytes(
+                    title=marker_value("pdf-with-embedded-text-marker", "title", 1),
+                    subject=marker_value("pdf-with-embedded-text-marker", "subject", 2),
+                ),
+                "PDF carrying an embedded text marker.",
+            ),
         ]
 
 
@@ -168,8 +206,16 @@ class PngPlugin(BasePlugin):
 
     def generate_metadata_samples(self) -> list[tuple[str, bytes, str]]:
         return [
-            ("png-text-marker.png", _png_bytes([("Comment", MARKERS[0])]), "PNG tEXt marker sample."),
-            ("png-text-reflection-probe.png", _png_bytes([("Comment", MARKERS[2])]), "PNG tEXt reflection probe."),
+            (
+                "png-text-marker.png",
+                _png_bytes([("Comment", marker_value("png-text-marker", "comment", 1))]),
+                "PNG tEXt marker sample.",
+            ),
+            (
+                "png-text-reflection-probe.png",
+                _png_bytes([("Comment", reflection_probe("png-text-reflection-probe", "comment"))]),
+                "PNG tEXt reflection probe.",
+            ),
         ]
 
     def generate_stress_samples(self, max_pixels: int, max_tiff_pages: int) -> list[tuple[str, bytes, str]]:
@@ -187,7 +233,13 @@ class TiffPlugin(BasePlugin):
         return FamilySample(self.family_id, logical_extension, data, self.magic_prefixes[0], self.mime_type)
 
     def generate_metadata_samples(self) -> list[tuple[str, bytes, str]]:
-        return [("tiff-description-marker.tiff", _tiff_bytes(MARKERS[1]), "TIFF ImageDescription marker sample.")]
+        return [
+            (
+                "tiff-description-marker.tiff",
+                _tiff_bytes(marker_value("tiff-description-marker", "image-description", 1)),
+                "TIFF ImageDescription marker sample.",
+            )
+        ]
 
     def generate_stress_samples(self, max_pixels: int, max_tiff_pages: int) -> list[tuple[str, bytes, str]]:
         return [("multipage-small-tiff.tiff", _tiff_bytes(f"pages={max_tiff_pages}"), "TIFF stress marker describing a bounded multipage target." )]

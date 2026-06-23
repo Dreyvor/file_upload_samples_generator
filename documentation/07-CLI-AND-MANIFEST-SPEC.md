@@ -26,10 +26,25 @@ python -m upload_samples generate \
   --out out
 ```
 
+Initialize reporting during generation:
+
+```bash
+python -m upload_samples generate --out out --init-reporting
+```
+
 ### Verify output
 
 ```bash
 python -m upload_samples verify --out out
+```
+
+### Reporting
+
+```bash
+python -m upload_samples report-init --out out
+python -m upload_samples report-ui --out out --host 127.0.0.1 --port 8765
+python -m upload_samples report-status --out out
+python -m upload_samples report-export --out out
 ```
 
 ### List categories
@@ -61,6 +76,7 @@ python -m upload_samples generate \
 --overwrite
 --format json|csv|both
 --verbose
+--init-reporting
 ```
 
 ## Categories

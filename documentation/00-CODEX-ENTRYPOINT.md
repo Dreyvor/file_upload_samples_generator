@@ -121,6 +121,16 @@ python -m upload_samples mitra --mitra-path ../mitra/mitra.py --out out/polyglot
 python -m upload_samples import-polydet --src ../polyglot-database/files --out out/reference-polyglots
 ```
 
+Reporting workflow:
+
+```bash
+python -m upload_samples generate --out out --init-reporting
+python -m upload_samples report-init --out out
+python -m upload_samples report-ui --out out --host 127.0.0.1 --port 8765
+python -m upload_samples report-status --out out
+python -m upload_samples report-export --out out
+```
+
 ## Work order for Codex
 
 1. Read all Markdown files in this folder.

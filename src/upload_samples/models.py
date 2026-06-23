@@ -26,6 +26,7 @@ class GeneratorConfig:
     skip_existing: bool = False
     format: str = "both"
     mitra_path: Path | None = None
+    init_reporting: bool = False
 
 
 @dataclass

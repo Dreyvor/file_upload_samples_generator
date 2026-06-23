@@ -12,6 +12,7 @@ upload-sample-generator/
       cli.py
       config.py
       manifest.py
+      reporting.py
       signatures.py
       generators/
         __init__.py
@@ -35,6 +36,7 @@ upload-sample-generator/
     test_manifest.py
     test_signatures.py
     test_generation.py
+    test_reporting.py
   docs/
     TESTING-METHODOLOGY.md
     SAMPLE-CATALOG.md
@@ -133,6 +135,32 @@ Each generator should:
 - check expected magic prefix;
 - confirm mismatch flag correctness;
 - optionally run `file`/`python-magic` if available.
+
+## Reporting
+
+Reporting is backed by a local SQLite session database under the output
+directory and served through a localhost-only browser UI.
+
+Expected artifacts:
+
+```text
+out/
+  reporting/
+    session.sqlite3
+    ui/
+    final-report.html
+    report-summary.json
+    report-summary.md
+```
+
+Expected commands:
+
+```text
+report-init
+report-ui
+report-status
+report-export
+```
 
 ## Manifest examples
 

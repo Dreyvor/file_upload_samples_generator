@@ -9,6 +9,7 @@ from .generators import baseline, malformed, metadata, minimal_headers, mismatch
 from .manifest import load_manifest, write_manifest
 from .models import GeneratorConfig
 from .registry import FamilyRegistry
+from .reporting import export_report, init_reporting, run_report_ui, status_summary
 from .utils import sha256_file
 
 
@@ -107,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             help="Path to a local Mitra script for optional polyglot generation.",
         )
+        generate_parser.add_argument(
+            "--init-reporting",
+            action="store_true",
+            help="Initialize reporting scaffolding after sample generation finishes.",
+        )
 
     generate_parser = subparsers.add_parser(
         "generate",
@@ -149,6 +155,36 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Output directory containing generated files and manifest.json.",
     )
+
+    report_init_parser = subparsers.add_parser(
+        "report-init",
+        help="Initialize the reporting database and local UI assets.",
+        description="Create reporting/session.sqlite3 and reporting/ui assets from an existing manifest.json.",
+    )
+    report_init_parser.add_argument("--out", type=Path, required=True, help="Output directory containing an existing manifest.json file.")
+
+    report_ui_parser = subparsers.add_parser(
+        "report-ui",
+        help="Run the local reporting web UI.",
+        description="Serve a localhost-only reporting app with autosave backed by SQLite.",
+    )
+    report_ui_parser.add_argument("--out", type=Path, required=True, help="Output directory containing manifest.json and reporting assets.")
+    report_ui_parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind the local reporting server to. (default: 127.0.0.1)")
+    report_ui_parser.add_argument("--port", type=int, default=8765, help="Port to bind the local reporting server to. (default: 8765)")
+
+    report_export_parser = subparsers.add_parser(
+        "report-export",
+        help="Export the final HTML and summary reports.",
+        description="Render final-report.html plus JSON and Markdown summaries from the saved reporting session.",
+    )
+    report_export_parser.add_argument("--out", type=Path, required=True, help="Output directory containing the reporting session database.")
+
+    report_status_parser = subparsers.add_parser(
+        "report-status",
+        help="Show saved testing progress counts.",
+        description="Print current status totals from the reporting session database.",
+    )
+    report_status_parser.add_argument("--out", type=Path, required=True, help="Output directory containing the reporting session database.")
     return parser
 
 
@@ -176,6 +212,7 @@ def config_from_args(args: argparse.Namespace, registry: FamilyRegistry) -> Gene
         skip_existing=args.skip_existing,
         format=args.format,
         mitra_path=args.mitra_path,
+        init_reporting=args.init_reporting,
     )
 
 
@@ -189,6 +226,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
     for category in config.categories:
         entries.extend(CATEGORY_HANDLERS[category](config, registry))
     write_manifest(config.out_dir, config, entries)
+    if config.init_reporting:
+        init_reporting(config.out_dir)
     print(f"generated {len(entries)} manifest entries in {config.out_dir}")
     return 0
 
@@ -264,6 +303,34 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report_init(args: argparse.Namespace) -> int:
+    summary = init_reporting(args.out)
+    print(
+        f"initialized reporting in {args.out / 'reporting'} "
+        f"(entries={summary['total_entries']}, new_results={summary['new_results']}, retired_entries={summary['retired_entries']})"
+    )
+    return 0
+
+
+def cmd_report_ui(args: argparse.Namespace) -> int:
+    print(f"serving reporting UI on http://{args.host}:{args.port}")
+    run_report_ui(args.out, args.host, args.port)
+    return 0
+
+
+def cmd_report_export(args: argparse.Namespace) -> int:
+    outputs = export_report(args.out)
+    print(f"exported report to {outputs['html']}")
+    return 0
+
+
+def cmd_report_status(args: argparse.Namespace) -> int:
+    summary = status_summary(args.out)
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -277,5 +344,13 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_list_categories()
     if args.command == "list-families":
         return cmd_list_families()
+    if args.command == "report-init":
+        return cmd_report_init(args)
+    if args.command == "report-ui":
+        return cmd_report_ui(args)
+    if args.command == "report-export":
+        return cmd_report_export(args)
+    if args.command == "report-status":
+        return cmd_report_status(args)
     parser.error(f"unsupported command: {args.command}")
     return 2
