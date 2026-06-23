@@ -18,6 +18,27 @@ bombs, or phone-home content.
 
 The project supports Python 3.10.12 and newer.
 
+## Installation
+
+Install from the repository root:
+
+```bash
+python3 -m pip install -e .
+```
+
+Install with development dependencies:
+
+```bash
+python3 -m pip install -e ".[dev]"
+```
+
+Verify the CLI is available:
+
+```bash
+python3 -m upload_samples list-families
+python3 -m upload_samples list-categories
+```
+
 ## Quickstart
 
 ```bash

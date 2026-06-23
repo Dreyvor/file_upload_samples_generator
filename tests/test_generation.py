@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -65,3 +67,15 @@ def test_family_selection_limits_outputs(tmp_path: Path) -> None:
     entries = manifest["entries"]
     assert {entry["generated_content_family"] for entry in entries} == {"pdf"}
     assert {entry["logical_extension"] for entry in entries} == {"pdf"}
+
+
+def test_baseline_images_open_with_pillow(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    result = run_cli("generate", "--out", str(out_dir), "--category", "baseline")
+    assert result.returncode == 0, result.stderr
+
+    for name in ("valid.jpg", "valid.jpeg", "valid.tiff"):
+        path = out_dir / "baseline" / name
+        with Image.open(path) as image:
+            image.load()
+            assert image.size == (8, 8)

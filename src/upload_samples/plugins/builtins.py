@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import base64
+import io
 import struct
 import zlib
 from dataclasses import dataclass
+
+from PIL import Image
 
 from ..models import FamilySample
 
@@ -64,6 +67,13 @@ JPEG_BYTES = base64.b64decode(
 )
 
 
+def _jpeg_bytes() -> bytes:
+    buffer = io.BytesIO()
+    image = Image.new("RGB", (8, 8), color=(136, 204, 34))
+    image.save(buffer, format="JPEG", quality=92, optimize=False, progressive=False)
+    return buffer.getvalue()
+
+
 def _tiff_ascii_entry(tag: int, value: str, data_offset: int) -> bytes:
     return struct.pack("<HHII", tag, 2, len(value) + 1, data_offset)
 
@@ -81,35 +91,16 @@ def _tiff_rational_entry(tag: int, data_offset: int) -> bytes:
 
 
 def _tiff_bytes(description: str = "Upload Sample") -> bytes:
-    entries = 10
-    header = b"II*\x00" + struct.pack("<I", 8)
-    ifd_len = 2 + (entries * 12) + 4
-    bits_offset = 8 + ifd_len
-    xres_offset = bits_offset + 6
-    yres_offset = xres_offset + 8
-    desc_offset = yres_offset + 8
-    pixel_offset = desc_offset + len(description.encode("ascii")) + 1
-    body = [
-        struct.pack("<H", entries),
-        _tiff_long_entry(256, 1),
-        _tiff_long_entry(257, 1),
-        struct.pack("<HHII", 258, 3, 3, bits_offset),
-        _tiff_short_entry(259, 1),
-        _tiff_short_entry(262, 2),
-        _tiff_long_entry(273, pixel_offset),
-        _tiff_short_entry(277, 3),
-        _tiff_long_entry(278, 1),
-        _tiff_long_entry(279, 3),
-        _tiff_rational_entry(282, xres_offset),
-        _tiff_ascii_entry(270, description, desc_offset),
-        struct.pack("<I", 0),
-        struct.pack("<HHH", 8, 8, 8),
-        struct.pack("<II", 72, 1),
-        struct.pack("<II", 72, 1),
-        description.encode("ascii") + b"\x00",
-        b"\x88\xcc\x22",
-    ]
-    return header + b"".join(body)
+    buffer = io.BytesIO()
+    image = Image.new("RGB", (8, 8), color=(136, 204, 34))
+    image.save(
+        buffer,
+        format="TIFF",
+        compression="raw",
+        tiffinfo={270: description},
+        dpi=(72, 72),
+    )
+    return buffer.getvalue()
 
 
 @dataclass
@@ -164,7 +155,7 @@ class JpegPlugin(BasePlugin):
         super().__init__("jpg", ("jpg", "jpeg"), (bytes.fromhex("FFD8FF"),), "image/jpeg", frozenset({"baseline", "malformed"}))
 
     def generate_valid(self, logical_extension: str) -> FamilySample:
-        return FamilySample(self.family_id, logical_extension, JPEG_BYTES, self.magic_prefixes[0], self.mime_type)
+        return FamilySample(self.family_id, logical_extension, _jpeg_bytes(), self.magic_prefixes[0], self.mime_type)
 
 
 class PngPlugin(BasePlugin):

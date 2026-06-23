@@ -27,33 +27,128 @@ CATEGORY_HANDLERS = {
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="upload_samples")
+    parser = argparse.ArgumentParser(
+        prog="upload_samples",
+        description="Generate and verify benign file-upload security test samples.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     def add_common(generate_parser: argparse.ArgumentParser) -> None:
-        generate_parser.add_argument("--out", type=Path, required=True)
-        generate_parser.add_argument("--category", action="append", choices=sorted(CATEGORY_HANDLERS), help="Generate only selected categories.")
-        generate_parser.add_argument("--family", action="append", help="Limit generation to selected canonical families.")
-        generate_parser.add_argument("--extension", action="append", help="Limit generation to selected logical extensions.")
-        generate_parser.add_argument("--seed", type=int, default=1337)
-        generate_parser.add_argument("--max-file-size-mb", type=int, default=10)
-        generate_parser.add_argument("--max-total-output-mb", type=int, default=250)
-        generate_parser.add_argument("--max-pixels", type=int, default=25_000_000)
-        generate_parser.add_argument("--max-tiff-pages", type=int, default=5)
-        generate_parser.add_argument("--skip-existing", action="store_true")
-        generate_parser.add_argument("--overwrite", action="store_true")
-        generate_parser.add_argument("--format", choices=("json", "csv", "both"), default="both")
-        generate_parser.add_argument("--mitra-path", type=Path)
+        generate_parser.add_argument(
+            "--out",
+            type=Path,
+            required=True,
+            help="Output directory where samples, manifests, and recipe files will be written.",
+        )
+        generate_parser.add_argument(
+            "--category",
+            action="append",
+            choices=sorted(CATEGORY_HANDLERS),
+            help="Generate only the selected category. Repeat the option to include multiple categories.",
+        )
+        generate_parser.add_argument(
+            "--family",
+            action="append",
+            help="Restrict generation to canonical content families such as pdf, jpg, png, or tiff.",
+        )
+        generate_parser.add_argument(
+            "--extension",
+            action="append",
+            help="Restrict generation to logical filename extensions such as pdf, jpg, jpeg, png, or tiff.",
+        )
+        generate_parser.add_argument(
+            "--seed",
+            type=int,
+            default=1337,
+            help="Seed used for deterministic malformed tails and any other pseudo-random sample generation.",
+        )
+        generate_parser.add_argument(
+            "--max-file-size-mb",
+            type=int,
+            default=10,
+            help="Per-file safety limit in megabytes for bounded generators.",
+        )
+        generate_parser.add_argument(
+            "--max-total-output-mb",
+            type=int,
+            default=250,
+            help="Overall output budget in megabytes for a generation run.",
+        )
+        generate_parser.add_argument(
+            "--max-pixels",
+            type=int,
+            default=25_000_000,
+            help="Maximum pixel budget used by bounded image stress generators.",
+        )
+        generate_parser.add_argument(
+            "--max-tiff-pages",
+            type=int,
+            default=5,
+            help="Maximum page count target used by bounded TIFF stress generation.",
+        )
+        generate_parser.add_argument(
+            "--skip-existing",
+            action="store_true",
+            help="Skip writing files that already exist instead of failing or replacing them.",
+        )
+        generate_parser.add_argument(
+            "--overwrite",
+            action="store_true",
+            help="Allow generated files to replace existing files in the output directory.",
+        )
+        generate_parser.add_argument(
+            "--format",
+            choices=("json", "csv", "both"),
+            default="both",
+            help="Manifest output format: JSON only, CSV only, or both.",
+        )
+        generate_parser.add_argument(
+            "--mitra-path",
+            type=Path,
+            help="Path to a local Mitra script for optional polyglot generation.",
+        )
 
-    add_common(subparsers.add_parser("generate"))
-    subparsers.add_parser("list-categories")
-    subparsers.add_parser("list-families")
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="Generate sample files, recipes, and manifests.",
+        description="Generate benign file-upload test samples into the selected output directory.",
+    )
+    add_common(generate_parser)
 
-    manifest_parser = subparsers.add_parser("manifest")
-    manifest_parser.add_argument("--out", type=Path, required=True)
+    subparsers.add_parser(
+        "list-categories",
+        help="List supported generation categories.",
+        description="Print all category names that can be passed to --category.",
+    )
+    subparsers.add_parser(
+        "list-families",
+        help="List supported file families and extensions.",
+        description="Print all registered canonical families and the logical extensions they provide.",
+    )
 
-    verify_parser = subparsers.add_parser("verify")
-    verify_parser.add_argument("--out", type=Path, required=True)
+    manifest_parser = subparsers.add_parser(
+        "manifest",
+        help="Rewrite manifest files from the existing manifest.json.",
+        description="Reformat manifest.json and regenerate manifest.csv from an existing output directory.",
+    )
+    manifest_parser.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="Output directory containing an existing manifest.json file.",
+    )
+
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Verify generated files against manifest.json.",
+        description="Check file existence, file size, SHA-256, magic bytes, and mismatch flags for an output directory.",
+    )
+    verify_parser.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="Output directory containing generated files and manifest.json.",
+    )
     return parser
 
 
