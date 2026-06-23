@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..models import GeneratorConfig
 from ..registry import FamilyRegistry
-from .common import build_entry, expected_behavior_text, write_artifact
+from .common import build_entry, expected_behavior_text, html_active_content_sample, write_artifact, write_recipe
 
 
 def generate(config: GeneratorConfig, registry: FamilyRegistry) -> list:
@@ -33,4 +33,32 @@ def generate(config: GeneratorConfig, registry: FamilyRegistry) -> list:
                     data=sample.data,
                 )
             )
+    html_sample = html_active_content_sample().encode("utf-8")
+    for logical_extension in config.selected_extensions:
+        write_artifact(
+            config,
+            f"mismatch/manual-html-content-as-{logical_extension}.{logical_extension}",
+            html_sample,
+        )
+    write_recipe(
+        config,
+        "mismatch/html-content-notes.md",
+        "\n".join(
+            [
+                "# HTML content mismatch helpers",
+                "",
+                "These helper files contain active HTML content saved with the selected non-HTML extensions.",
+                "They are intentionally kept out of `manifest.json` because HTML is not yet a first-class registered family in this tool.",
+                "",
+                "Use them to check whether the target:",
+                "- trusts the filename extension only",
+                "- sniffs content and serves it as `text/html`",
+                "- reflects or previews the uploaded file unsafely",
+                "- allows download/open flows that execute active browser content",
+                "",
+                "Generated helper filenames follow `manual-html-content-as-<extension>.<extension>`.",
+            ]
+        )
+        + "\n",
+    )
     return entries

@@ -42,6 +42,7 @@ python -m upload_samples verify --out out
 
 ```bash
 python -m upload_samples report-init --out out
+python -m upload_samples report-init --out out --reset
 python -m upload_samples report-ui --out out --host 127.0.0.1 --port 8765
 python -m upload_samples report-status --out out
 python -m upload_samples report-export --out out
@@ -62,6 +63,16 @@ python -m upload_samples generate \
   --out out
 ```
 
+Keep empty Mitra pair directories for debugging:
+
+```bash
+python -m upload_samples generate \
+  --category polyglots \
+  --mitra-path ../mitra/mitra.py \
+  --out out \
+  --debug
+```
+
 ### Options
 
 ```text
@@ -72,10 +83,10 @@ python -m upload_samples generate \
 --max-total-output-mb INT
 --max-pixels INT
 --mitra-path PATH
+--debug
 --skip-existing
 --overwrite
 --format json|csv|both
---verbose
 --init-reporting
 ```
 
@@ -92,7 +103,6 @@ multipart-recipes
 stress-bounded
 pdf-structures
 polyglots
-reference-import
 ```
 
 ## Manifest JSON schema
@@ -155,18 +165,21 @@ created_at
 provenance_json
 ```
 
-## ID naming convention
+## ID convention
 
-Use stable IDs:
+Manifest ids are stable UUIDv5-style identifiers derived from category, relative path, logical extension, content family, and file content hash. They are not based on filenames alone.
 
 ```text
-baseline-valid-pdf
-mismatch-ext-pdf-content-jpg
-minimal-header-png
-metadata-pdf-title-xss-probe
-filename-recipe-rtlo
-polyglot-pdf-jpg-as-pdf
+f4aa83ea-6f35-5826-b735-7f0870a78f2f
 ```
+
+## Polyglot behavior notes
+
+- host extension = each selected extension
+- payload extension = each other selected extension plus `html`
+- Mitra is always called with `-f`
+- Mitra-generated filenames are preserved exactly
+- empty pair directories containing only `mitra.log` are deleted unless `--debug` is set
 
 ## MIME mapping
 

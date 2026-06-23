@@ -91,7 +91,7 @@ Every generated sample must have a manifest entry describing:
 
 ## Suggested tech stack
 
-Prefer Python 3.11+.
+Prefer Python 3.10.12+.
 
 Recommended libraries:
 
@@ -117,8 +117,7 @@ python -m upload_samples list-categories
 Optional:
 
 ```bash
-python -m upload_samples mitra --mitra-path ../mitra/mitra.py --out out/polyglots
-python -m upload_samples import-polydet --src ../polyglot-database/files --out out/reference-polyglots
+python -m upload_samples generate --category polyglots --mitra-path ../mitra/mitra.py --out out
 ```
 
 Reporting workflow:

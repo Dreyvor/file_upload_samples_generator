@@ -63,6 +63,7 @@ Special case:
 
 - `.jpg` and `.jpeg` with JPEG content are not mismatches.
 - `.jpg` with `.jpeg` content and `.jpeg` with `.jpg` content should be treated as equivalent JPEG content.
+- also generate manual HTML-content helpers saved under allowed extensions, for example `mismatch/manual-html-content-as-jpg.jpg`, to test MIME sniffing and unsafe preview behavior outside the manifest-backed binary matrix.
 
 ## Category C: Minimal magic-byte files
 
@@ -219,6 +220,25 @@ Purpose:
 - find discrepancies between WAF/backend/application;
 - test parser routing.
 
+Also generate a small HTML helper file:
+
+```text
+multipart-recipes/xss-iframe-sample.html
+```
+
+Contents:
+
+- one visible `<h1>` marker;
+- one simple `alert(...)` JavaScript marker;
+- one inert `<iframe>`;
+- no external callbacks or remote dependencies.
+
+Purpose:
+
+- test unsafe inline serving;
+- test browser preview rendering;
+- test HTML sanitization assumptions in upload/view flows.
+
 ## Category H: Bounded stress samples
 
 Generate only safe bounded stress cases:
@@ -268,33 +288,41 @@ Purpose:
 
 Integrate optionally with Mitra.
 
-Input seeds:
+Input seeds are built automatically from the currently selected extensions, plus one HTML seed:
 
 ```text
-seeds/pdf/simple.pdf
-seeds/images/simple.jpg
-seeds/images/simple.png
-seeds/images/simple.tiff
+polyglots/manual-html-seed.html
 ```
 
-Generate combinations:
+Generate ordered host/payload combinations:
 
 ```text
 polyglots/pdf-jpg/
+polyglots/pdf-jpeg/
 polyglots/pdf-png/
 polyglots/pdf-tiff/
+polyglots/pdf-html/
 polyglots/jpg-pdf/
-polyglots/png-pdf/
-polyglots/tiff-pdf/
+polyglots/jpg-html/
+polyglots/png-html/
+polyglots/tiff-png/
 ```
 
-For each generated polyglot, copy it with multiple allowed extensions:
+Rules:
 
-```text
-polyglots/pdf-jpg/sample-as-pdf.pdf
-polyglots/pdf-jpg/sample-as-jpg.jpg
-polyglots/pdf-jpg/sample-as-jpeg.jpeg
-```
+- host = every selected extension;
+- payload = every other selected extension plus `html`;
+- skip same-extension pairs;
+- always call Mitra with `-f`, so file 2 is treated as a forced blob payload;
+- preserve Mitra-generated output filenames exactly;
+- store `mitra.log` in each pair directory;
+- store `mitra-features.log` when at least one sample is produced;
+- delete pair directories that contain only `mitra.log`, unless `--debug` is used.
+
+Notes:
+
+- Mitra has no dedicated HTML parser in its main parser set, so HTML is provided through the forced-blob path.
+- The generated samples are still useful because downstream validators, previewers, and browsers may disagree on type handling even when Mitra treats file 2 generically.
 
 Purpose:
 
@@ -302,20 +330,3 @@ Purpose:
 - test detector disagreement;
 - test AV/CDR routing;
 - test downstream component assumptions.
-
-## Category K: Reference-import mode
-
-Optional mode:
-
-```bash
-python -m upload_samples import-reference --src ../polyglot-database/files --out out/reference
-```
-
-Only import files whose extension/content families are relevant:
-
-- pdf
-- jpg/jpeg
-- png
-- tiff
-
-Do not redistribute imported files unless license permits. Prefer local user-provided path and store provenance in the manifest.

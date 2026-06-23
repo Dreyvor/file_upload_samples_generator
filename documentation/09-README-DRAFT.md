@@ -111,6 +111,8 @@ Markdown recipes for raw multipart filenames that should not be created as local
 
 Raw request examples with conflicting `Content-Type`, filename extension, and file bytes.
 
+Also includes `multipart-recipes/xss-iframe-sample.html` for inline HTML rendering checks.
+
 ### Bounded stress
 
 Safe resource-handling samples, such as large-dimension images and multipage TIFFs, within strict limits.
@@ -134,6 +136,23 @@ python -m upload_samples generate \
   --category polyglots \
   --mitra-path ../mitra/mitra.py \
   --out out
+```
+
+Behavior:
+
+- every selected host extension is paired against every other selected extension plus `html`
+- Mitra is always called with `-f`, so file 2 is treated as a forced blob payload
+- Mitra output filenames are preserved
+- empty pair directories that contain only `mitra.log` are removed unless `--debug` is used
+
+Debug mode:
+
+```bash
+python -m upload_samples generate \
+  --category polyglots \
+  --mitra-path ../mitra/mitra.py \
+  --out out \
+  --debug
 ```
 
 ## Interpreting results

@@ -25,6 +25,19 @@ DEFAULT_SESSION_METADATA = {
     "overall_assessment": "",
 }
 
+CATEGORY_EXPLANATIONS = {
+    "baseline": "Baseline samples are small valid files for each allowed extension. Use them to confirm the happy-path behavior, preview generation, download headers, storage naming, OCR, and metadata handling before moving to adversarial cases.",
+    "mismatch": "Mismatch samples intentionally keep one allowed filename extension while embedding a different allowed content family. They help reveal whether the application validates extension and content independently instead of enforcing a strict mapping.",
+    "minimal-headers": "Minimal-header samples contain only the magic bytes or signature prefix required to trigger superficial type checks. They help distinguish weak header-only validation from real parser validation.",
+    "malformed": "Malformed samples start from valid or signature-looking content and then break structural integrity through truncation or bounded random tails. They help detect whether downstream components fail safely when parser validation is incomplete.",
+    "metadata": "Metadata samples embed unique marker values or benign reflection probes in fields that may later appear in the UI, logs, OCR, indexing, or exports. They help identify metadata reflection and sanitization issues.",
+    "filenames": "Filename recipes document risky multipart filenames that should be tested manually without creating dangerous local paths. They help assess normalization, reflection, traversal, reserved names, and shell-sensitive handling.",
+    "multipart-recipes": "Multipart recipes vary the declared Content-Type and related request headers without changing the sample bytes. They help determine which layer trusts multipart metadata and whether different components disagree on routing.",
+    "stress-bounded": "Bounded stress samples stay within defined safety limits while still exercising large dimensions, repeated metadata, or heavier parsing paths. They help reveal safe resource-handling weaknesses without becoming denial-of-service payloads.",
+    "pdf-structures": "PDF structure samples include benign document features such as form-like objects or embedded text markers. They help identify how the upload pipeline treats richer PDF structures without relying on active content.",
+    "polyglots": "Polyglot samples are optional composite files intended to exercise parser disagreement across multiple formats. They help detect whether validators, thumbnailers, renderers, or download handlers interpret the same bytes differently.",
+}
+
 TEST_RESULT_FIELDS = (
     "test_status",
     "validation_message",
@@ -112,10 +125,21 @@ INDEX_HTML = """<!DOCTYPE html>
     <h2>Session metadata</h2>
     <div class="metadata-grid" id="metadata-fields"></div>
   </section>
+  <section class="metadata-panel">
+    <h2>Test explanations</h2>
+    <div id="category-explanations"></div>
+  </section>
   <section class="results-panel">
     <h2>Test matrix</h2>
     <div class="table-wrapper">
       <table>
+        <colgroup>
+          <col class="sample-col">
+          <col class="status-col">
+          <col class="observed-col">
+          <col class="finding-col">
+          <col class="evidence-col">
+        </colgroup>
         <thead>
           <tr>
             <th>Sample</th>
@@ -152,6 +176,7 @@ APP_CSS = """
   --accent-soft: #dbe9f6;
   --warning: #9a4d11;
   --ok: #2c6b3f;
+  --sample-col-width: clamp(220px, 16vw, 300px);
 }
 * { box-sizing: border-box; }
 body {
@@ -161,7 +186,7 @@ body {
   color: var(--ink);
 }
 .page-header, .toolbar, .metadata-panel, .results-panel, .findings-panel {
-  width: min(1400px, calc(100vw - 32px));
+  width: min(90%, calc(100vw - 32px));
   margin: 16px auto;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -249,12 +274,29 @@ button {
 .metadata-grid textarea {
   min-height: 96px;
 }
+.explanation-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+.explanation-card p {
+  color: var(--ink);
+}
 .table-wrapper {
   overflow-x: auto;
 }
 table {
   width: 100%;
+  min-width: 1100px;
   border-collapse: collapse;
+}
+.results-panel table {
+  table-layout: fixed;
+}
+.results-panel col.sample-col {
+  width: var(--sample-col-width);
 }
 th, td {
   border-bottom: 1px solid var(--border);
@@ -270,16 +312,26 @@ th {
   font-size: 13px;
   color: var(--muted);
   margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 .sample-meta code {
   background: #f3ebde;
   padding: 2px 4px;
   border-radius: 4px;
+  overflow-wrap: anywhere;
 }
 .field-stack {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.field-stack label {
+  width: 100%;
+}
+.field-stack input,
+.field-stack textarea,
+.field-stack select {
+  width: min(100%, 34vw);
 }
 .field-stack textarea {
   min-width: 260px;
@@ -293,7 +345,7 @@ th {
 }
 .finding-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 10px;
 }
 .tag {
@@ -304,11 +356,50 @@ th {
   color: var(--ink);
   margin-right: 6px;
 }
+@media (max-width: 1280px) {
+  :root {
+    --sample-col-width: clamp(220px, 20vw, 320px);
+  }
+  .field-stack input,
+  .field-stack textarea,
+  .field-stack select {
+    width: min(100%, 42vw);
+  }
+}
+@media (max-width: 960px) {
+  :root {
+    --sample-col-width: clamp(220px, 24vw, 340px);
+  }
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .field-stack input,
+  .field-stack textarea,
+  .field-stack select {
+    width: min(100%, 56vw);
+  }
+  th, td {
+    padding: 10px;
+  }
+}
 """
 
 
 APP_JS = """
 const state = { session: null, results: [], findings: [] };
+const CATEGORY_EXPLANATIONS = {
+  "baseline": "Baseline samples are small valid files for each allowed extension. Use them to confirm the happy-path behavior, preview generation, download headers, storage naming, OCR, and metadata handling before moving to adversarial cases.",
+  "mismatch": "Mismatch samples intentionally keep one allowed filename extension while embedding a different allowed content family. They help reveal whether the application validates extension and content independently instead of enforcing a strict mapping.",
+  "minimal-headers": "Minimal-header samples contain only the magic bytes or signature prefix required to trigger superficial type checks. They help distinguish weak header-only validation from real parser validation.",
+  "malformed": "Malformed samples start from valid or signature-looking content and then break structural integrity through truncation or bounded random tails. They help detect whether downstream components fail safely when parser validation is incomplete.",
+  "metadata": "Metadata samples embed unique marker values or benign reflection probes in fields that may later appear in the UI, logs, OCR, indexing, or exports. They help identify metadata reflection and sanitization issues.",
+  "filenames": "Filename recipes document risky multipart filenames that should be tested manually without creating dangerous local paths. They help assess normalization, reflection, traversal, reserved names, and shell-sensitive handling.",
+  "multipart-recipes": "Multipart recipes vary the declared Content-Type and related request headers without changing the sample bytes. They help determine which layer trusts multipart metadata and whether different components disagree on routing.",
+  "stress-bounded": "Bounded stress samples stay within defined safety limits while still exercising large dimensions, repeated metadata, or heavier parsing paths. They help reveal safe resource-handling weaknesses without becoming denial-of-service payloads.",
+  "pdf-structures": "PDF structure samples include benign document features such as form-like objects or embedded text markers. They help identify how the upload pipeline treats richer PDF structures without relying on active content.",
+  "polyglots": "Polyglot samples are optional composite files intended to exercise parser disagreement across multiple formats. They help detect whether validators, thumbnailers, renderers, or download handlers interpret the same bytes differently.",
+};
 
 const FIELD_HELP = {
   tester_name: "Name of the tester currently recording results in this session.",
@@ -478,6 +569,14 @@ async function saveFinding(findingId, payload) {
   renderFindings();
 }
 
+async function deleteFinding(findingId) {
+  setSaveStatus("Deleting finding...");
+  await api(`/api/findings/${findingId}`, { method: "DELETE" });
+  state.findings = state.findings.filter((item) => item.id !== findingId);
+  setSaveStatus("Saved");
+  renderFindings();
+}
+
 function renderSession() {
   const summary = document.getElementById("session-summary");
   summary.textContent = `${state.session.total_entries} samples loaded. ${state.session.progress_summary}`;
@@ -494,12 +593,21 @@ function renderSession() {
   for (const [key, label, multiline] of fields) {
     metadataRoot.appendChild(field(label, key, state.session.metadata[key], (value) => saveSessionField(key, value), Boolean(multiline)));
   }
+  const explanationRoot = document.getElementById("category-explanations");
+  explanationRoot.innerHTML = "";
+  const categories = [...new Set(state.results.map((item) => item.category))].sort();
+  for (const category of categories) {
+    const card = document.createElement("div");
+    card.className = "explanation-card";
+    card.innerHTML = `<h3>${category}</h3><p>${CATEGORY_EXPLANATIONS[category] || "This category exercises a specific upload validation behavior."}</p>`;
+    explanationRoot.appendChild(card);
+  }
 }
 
 function resultRow(item) {
   const row = document.createElement("tr");
   const sampleCell = document.createElement("td");
-  sampleCell.innerHTML = `<strong>${item.filename}</strong><div class="sample-meta"><code>${item.id}</code> · ${item.category} · ${item.generated_content_family} · ${item.logical_extension}<br>${item.description}<br>${item.expected_behavior}</div>`;
+  sampleCell.innerHTML = `<strong>${item.filename}</strong><div class="sample-meta"><code>${item.id}</code> · ${item.category} · ${item.generated_content_family} · ${item.logical_extension}<br><strong>Why this test exists:</strong> ${item.description}<br><strong>What to verify:</strong> ${item.expected_behavior}<br><strong>Category guide:</strong> ${CATEGORY_EXPLANATIONS[item.category] || ""}</div>`;
   row.appendChild(sampleCell);
 
   const statusCell = document.createElement("td");
@@ -579,9 +687,24 @@ function renderFindings() {
     const card = document.createElement("div");
     card.className = "finding-card";
     card.innerHTML = `<div class="tag">${finding.severity || "unspecified"}</div><div class="tag">${(finding.manifest_ids || []).length} sample(s)</div>`;
+    const deleteWrap = document.createElement("div");
+    deleteWrap.style.display = "flex";
+    deleteWrap.style.justifyContent = "flex-end";
+    deleteWrap.style.marginBottom = "10px";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => {
+      if (confirm("Delete this finding?")) {
+        deleteFinding(finding.id);
+      }
+    });
+    deleteWrap.appendChild(remove);
+    card.appendChild(deleteWrap);
     const grid = document.createElement("div");
     grid.className = "finding-grid";
     grid.appendChild(field("Title", "title", finding.title, (value) => saveFinding(finding.id, { ...finding, title: value })));
+    grid.appendChild(field("Severity", "severity", finding.severity, (value) => saveFinding(finding.id, { ...finding, severity: value })));
     grid.appendChild(field("Affected sample IDs", "manifest_ids", (finding.manifest_ids || []).join(", "), (value) => saveFinding(finding.id, { ...finding, manifest_ids: value.split(",").map((item) => item.trim()).filter(Boolean) }), true));
     grid.appendChild(field("Summary", "summary", finding.summary, (value) => saveFinding(finding.id, { ...finding, summary: value }), true));
     grid.appendChild(field("Recommendation", "recommendation", finding.recommendation, (value) => saveFinding(finding.id, { ...finding, recommendation: value }), true));
@@ -825,6 +948,13 @@ def init_reporting(out_dir: Path) -> dict[str, int]:
     return {"total_entries": total, "new_results": added, "retired_entries": removed}
 
 
+def reset_reporting(out_dir: Path) -> dict[str, int]:
+    db_path = session_db_path(out_dir)
+    if db_path.exists():
+        db_path.unlink()
+    return init_reporting(out_dir)
+
+
 def load_session_state(out_dir: Path) -> dict[str, Any]:
     payload = require_manifest(out_dir)
     db_path = session_db_path(out_dir)
@@ -998,6 +1128,14 @@ def upsert_finding(out_dir: Path, payload: dict[str, Any], finding_id: int | Non
     raise KeyError(f"finding not found after update: {finding_id}")
 
 
+def delete_finding(out_dir: Path, finding_id: int) -> None:
+    connection = connect(session_db_path(out_dir))
+    ensure_schema(connection)
+    connection.execute("DELETE FROM findings WHERE id = ?", (finding_id,))
+    connection.commit()
+    connection.close()
+
+
 def status_summary(out_dir: Path) -> dict[str, int]:
     connection = connect(session_db_path(out_dir))
     ensure_schema(connection)
@@ -1110,8 +1248,8 @@ def export_report(out_dir: Path) -> dict[str, str]:
     for category, rows in sorted(by_category.items()):
         rendered_rows = "".join(
             f"""
-            <tr>
-              <td><code>{html.escape(row['id'])}</code><br>{html.escape(row['filename'])}</td>
+            <tr data-report-sample="1" data-status="{html.escape(row['test_status'])}" data-category="{html.escape(category)}" data-has-finding="{'yes' if row['finding_title'] else 'no'}">
+              <td><code>{html.escape(row['id'])}</code><br>{html.escape(row['filename'])}<br><small>{html.escape(row['description'])}</small></td>
               <td>{html.escape(row['test_status'])}</td>
               <td>{html.escape(row['displayed_type'] or row['detected_mime_ui'] or '')}</td>
               <td>{html.escape(row['validation_message'])}</td>
@@ -1125,6 +1263,7 @@ def export_report(out_dir: Path) -> dict[str, str]:
             f"""
             <section class="report-section">
               <h3>{html.escape(category)}</h3>
+              <p>{html.escape(CATEGORY_EXPLANATIONS.get(category, 'This category exercises a specific upload validation behavior.'))}</p>
               <table>
                 <thead><tr><th>Sample</th><th>Status</th><th>Displayed type</th><th>Validation</th><th>Finding</th><th>Evidence</th></tr></thead>
                 <tbody>{rendered_rows}</tbody>
@@ -1157,7 +1296,7 @@ def export_report(out_dir: Path) -> dict[str, str]:
   <title>Upload Sample Test Report</title>
   <style>
     body {{ font-family: Georgia, "Times New Roman", serif; margin: 0; background: #f7f2e9; color: #1e1a15; }}
-    main {{ width: min(1200px, calc(100vw - 32px)); margin: 24px auto; }}
+    main {{ width: min(90%, calc(100vw - 32px)); margin: 24px auto; }}
     header, section {{ background: #fffdf8; border: 1px solid #d7ccbc; border-radius: 16px; padding: 18px 22px; margin-bottom: 16px; }}
     h1, h2, h3 {{ margin-top: 0; }}
     .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
@@ -1166,6 +1305,9 @@ def export_report(out_dir: Path) -> dict[str, str]:
     th, td {{ border-bottom: 1px solid #eadfcd; padding: 10px; text-align: left; vertical-align: top; }}
     code {{ background: #f2e9dc; padding: 2px 4px; border-radius: 4px; }}
     .finding {{ border: 1px solid #eadfcd; border-radius: 12px; padding: 12px; margin-bottom: 12px; }}
+    .report-toolbar {{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom: 14px; }}
+    .report-toolbar label {{ display:flex; flex-direction:column; gap:6px; font-size:14px; }}
+    .hidden-row {{ display:none; }}
   </style>
 </head>
 <body>
@@ -1193,6 +1335,10 @@ def export_report(out_dir: Path) -> dict[str, str]:
       {methodology_html(out_dir)}
     </section>
     <section>
+      <h2>Test Explanations</h2>
+      {''.join(f"<article class='finding'><h3>{html.escape(category)}</h3><p>{html.escape(CATEGORY_EXPLANATIONS.get(category, 'This category exercises a specific upload validation behavior.'))}</p></article>" for category in sorted(by_category))}
+    </section>
+    <section>
       <h2>Notable Findings</h2>
       {''.join(findings_blocks)}
     </section>
@@ -1205,6 +1351,26 @@ def export_report(out_dir: Path) -> dict[str, str]:
     </section>
     <section>
       <h2>Category Results</h2>
+      <div class="report-toolbar">
+        <label>Filter status
+          <select id="sample-filter-status">
+            <option value="">All</option>
+            {''.join(f"<option value='{status}'>{status}</option>" for status in ALLOWED_TEST_STATUSES)}
+          </select>
+        </label>
+        <label>Filter category
+          <select id="sample-filter-category">
+            <option value="">All</option>
+            {''.join(f"<option value='{html.escape(category)}'>{html.escape(category)}</option>" for category in sorted(by_category))}
+          </select>
+        </label>
+        <label>Findings only
+          <select id="sample-filter-findings">
+            <option value="">All</option>
+            <option value="yes">Only samples with findings</option>
+          </select>
+        </label>
+      </div>
       {''.join(category_sections)}
     </section>
     <section>
@@ -1220,6 +1386,28 @@ def export_report(out_dir: Path) -> dict[str, str]:
       </table>
     </section>
   </main>
+  <script>
+    (() => {{
+      const statusFilter = document.getElementById("sample-filter-status");
+      const categoryFilter = document.getElementById("sample-filter-category");
+      const findingsFilter = document.getElementById("sample-filter-findings");
+      const sampleRows = [...document.querySelectorAll("tr[data-report-sample='1']")];
+      const applySampleFilters = () => {{
+        sampleRows.forEach((row) => {{
+          const matchesStatus = !statusFilter.value || row.dataset.status === statusFilter.value;
+          const matchesCategory = !categoryFilter.value || row.dataset.category === categoryFilter.value;
+          const matchesFinding = !findingsFilter.value || row.dataset.hasFinding === "yes";
+          row.classList.toggle("hidden-row", !(matchesStatus && matchesCategory && matchesFinding));
+        }});
+      }};
+      if (statusFilter && categoryFilter && findingsFilter) {{
+        statusFilter.addEventListener("change", applySampleFilters);
+        categoryFilter.addEventListener("change", applySampleFilters);
+        findingsFilter.addEventListener("change", applySampleFilters);
+        applySampleFilters();
+      }}
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -1333,12 +1521,28 @@ class ReportingRequestHandler(BaseHTTPRequestHandler):
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
+    def do_DELETE(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        try:
+            if parsed.path.startswith("/api/findings/"):
+                finding_id = int(parsed.path.rsplit("/", 1)[1])
+                delete_finding(self.out_dir, finding_id)
+                self.send_response(HTTPStatus.NO_CONTENT)
+                self.end_headers()
+                return
+        except (KeyError, ValueError) as exc:
+            self._send_text(str(exc), status=400)
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
     def log_message(self, format: str, *args: Any) -> None:
         return
 
 
 def run_report_ui(out_dir: Path, host: str, port: int) -> None:
-    init_reporting(out_dir)
+    write_ui_assets(out_dir)
+    if not session_db_path(out_dir).exists():
+        init_reporting(out_dir)
     server = ThreadingHTTPServer((host, port), ReportingRequestHandler)
     server.out_dir = out_dir  # type: ignore[attr-defined]
     try:

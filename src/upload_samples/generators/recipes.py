@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..models import GeneratorConfig
 from ..registry import FamilyRegistry
-from .common import write_recipe
+from .common import html_active_content_sample, write_recipe
 
 
 FILENAME_VALUES = [
@@ -80,4 +80,9 @@ def generate_multipart(config: GeneratorConfig, registry: FamilyRegistry) -> lis
     ]
     write_recipe(config, "multipart-recipes/content-type-confusion.md", "\n".join(lines) + "\n")
     write_recipe(config, "multipart-recipes/curl-examples.md", "\n".join(lines[-8:]) + "\n")
+    write_recipe(
+        config,
+        "multipart-recipes/xss-iframe-sample.html",
+        html_active_content_sample(),
+    )
     return []

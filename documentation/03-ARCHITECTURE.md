@@ -10,28 +10,25 @@ upload-sample-generator/
     upload_samples/
       __init__.py
       cli.py
-      config.py
       manifest.py
       reporting.py
-      signatures.py
       generators/
         __init__.py
         baseline.py
+        common.py
         mismatch.py
+        minimal_headers.py
         malformed.py
         metadata.py
-        filenames.py
-        multipart.py
+        recipes.py
         stress.py
         pdf_structures.py
-        polyglot_mitra.py
-        import_reference.py
-      utils/
-        __init__.py
-        files.py
-        hashing.py
-        detect.py
-        safe_names.py
+        polyglots.py
+      plugins/
+        builtins.py
+      registry.py
+      models.py
+      utils.py
   tests/
     test_manifest.py
     test_signatures.py
@@ -166,7 +163,7 @@ report-export
 
 ```json
 {
-  "id": "mismatch-ext-pdf-content-jpg",
+  "id": "f4aa83ea-6f35-5826-b735-7f0870a78f2f",
   "category": "mismatch",
   "relative_path": "mismatch/ext-pdf_content-jpg.pdf",
   "filename": "ext-pdf_content-jpg.pdf",
@@ -176,7 +173,7 @@ report-export
   "expected_magic_hex": "ffd8ff",
   "mismatch": true,
   "risk_level": "low",
-  "generator": "mismatch.generate_matrix",
+  "generator": "mismatch.generate",
   "description": "Valid JPEG bytes saved with .pdf extension.",
   "expected_behavior": "Strict validators should reject extension/content mismatch; weak independent allowlist validators may accept.",
   "sha256": "...",

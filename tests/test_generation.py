@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +60,41 @@ def test_risky_filenames_stay_in_recipes(tmp_path: Path) -> None:
     assert not (out_dir / "../../file.pdf").exists()
 
 
+def test_html_recipe_sample_is_generated(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    result = run_cli("generate", "--out", str(out_dir), "--category", "multipart-recipes")
+    assert result.returncode == 0, result.stderr
+
+    html_sample = (out_dir / "multipart-recipes" / "xss-iframe-sample.html").read_text(encoding="utf-8")
+    assert "<h1>Upload Sample HTML Test</h1>" in html_sample
+    assert "alert('XSS sample triggered');" in html_sample
+    assert "<iframe" in html_sample
+
+
+def test_html_mismatch_helpers_are_generated(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    result = run_cli("generate", "--out", str(out_dir), "--category", "mismatch")
+    assert result.returncode == 0, result.stderr
+
+    notes = (out_dir / "mismatch" / "html-content-notes.md").read_text(encoding="utf-8")
+    assert "HTML content mismatch helpers" in notes
+
+    helper = (out_dir / "mismatch" / "manual-html-content-as-jpg.jpg").read_text(encoding="utf-8")
+    assert "<h1>Upload Sample HTML Test</h1>" in helper
+    assert "alert('XSS sample triggered');" in helper
+
+
+def test_html_polyglot_helper_seed_is_generated_without_mitra(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    result = run_cli("generate", "--out", str(out_dir), "--category", "polyglots")
+    assert result.returncode == 0, result.stderr
+
+    html_seed = (out_dir / "polyglots" / "manual-html-seed.html").read_text(encoding="utf-8")
+    notes = (out_dir / "polyglots" / "html-manual-test-notes.md").read_text(encoding="utf-8")
+    assert "<h1>Upload Sample HTML Test</h1>" in html_seed
+    assert "forced blob payload" in notes
+
+
 def test_family_selection_limits_outputs(tmp_path: Path) -> None:
     out_dir = tmp_path / "out"
     result = run_cli("generate", "--out", str(out_dir), "--family", "pdf", "--category", "baseline", "--category", "mismatch")
@@ -111,3 +147,222 @@ def test_manifest_ids_are_unique_with_repeated_filenames(tmp_path: Path) -> None
     manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
     ids = [entry["id"] for entry in manifest["entries"]]
     assert len(ids) == len(set(ids))
+
+
+def test_polyglot_generation_collects_mitra_outputs(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    mitra_dir = tmp_path / "mitra"
+    mitra_dir.mkdir()
+    fake_mitra = mitra_dir / "mitra.py"
+    fake_mitra.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "if args and args[0] == '-f':\n"
+        "    args = args[1:]\n"
+        "out = Path.cwd() / 'poly-result.bin'\n"
+        "out.write_bytes(Path(args[0]).read_bytes() + b'POLYGLOT' + Path(args[1]).read_bytes())\n",
+        encoding="utf-8",
+    )
+
+    result = run_cli(
+        "generate",
+        "--out",
+        str(out_dir),
+        "--category",
+        "polyglots",
+        "--mitra-path",
+        str(fake_mitra),
+    )
+    assert result.returncode == 0, result.stderr
+
+    manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    poly_entries = [entry for entry in manifest["entries"] if entry["category"] == "polyglots"]
+    assert poly_entries
+    assert any(entry["relative_path"].endswith("poly-result.bin") for entry in poly_entries)
+    assert (out_dir / "polyglots" / "pdf-jpg" / "mitra-features.log").exists()
+    assert (out_dir / "polyglots" / "png-html" / "mitra.log").exists()
+
+
+def test_polyglot_generation_collects_nested_mitra_outputs(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    mitra_dir = tmp_path / "mitra"
+    mitra_dir.mkdir()
+    fake_mitra = mitra_dir / "mitra.py"
+    fake_mitra.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "if args and args[0] == '-f':\n"
+        "    args = args[1:]\n"
+        "nested = Path.cwd() / 'nested'\n"
+        "nested.mkdir(exist_ok=True)\n"
+        "(nested / 'poly-result.bin').write_bytes(b'POLY')\n",
+        encoding="utf-8",
+    )
+
+    result = run_cli(
+        "generate",
+        "--out",
+        str(out_dir),
+        "--category",
+        "polyglots",
+        "--mitra-path",
+        str(fake_mitra),
+    )
+    assert result.returncode == 0, result.stderr
+
+    manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    poly_entries = [entry for entry in manifest["entries"] if entry["category"] == "polyglots"]
+    assert poly_entries
+
+
+def test_polyglot_generation_supports_png_html_via_forced_blob(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    mitra_dir = tmp_path / "mitra"
+    mitra_dir.mkdir()
+    fake_mitra = mitra_dir / "mitra.py"
+    fake_mitra.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "forced = False\n"
+        "if args and args[0] == '-f':\n"
+        "    forced = True\n"
+        "    args = args[1:]\n"
+        "seed1 = Path(args[0])\n"
+        "seed2 = Path(args[1])\n"
+        "if seed2.suffix == '.html':\n"
+        "    assert forced, 'expected -f for HTML payload'\n"
+        "    Path.cwd().joinpath('P(10-40)-PNG[BIN].deadbeef..png..html').write_bytes(seed1.read_bytes() + seed2.read_bytes())\n"
+        "else:\n"
+        "    Path.cwd().joinpath('poly-result.bin').write_bytes(seed1.read_bytes() + b'POLYGLOT' + seed2.read_bytes())\n",
+        encoding="utf-8",
+    )
+
+    result = run_cli(
+        "generate",
+        "--out",
+        str(out_dir),
+        "--category",
+        "polyglots",
+        "--mitra-path",
+        str(fake_mitra),
+    )
+    assert result.returncode == 0, result.stderr
+
+    manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    html_poly_entries = [
+        entry
+        for entry in manifest["entries"]
+        if entry["category"] == "polyglots" and entry["generated_content_family"] == "png-html"
+    ]
+    assert html_poly_entries
+    assert any(entry["relative_path"].endswith("P(10-40)-PNG[BIN].deadbeef..png..html") for entry in html_poly_entries)
+    assert (out_dir / "polyglots" / "png-html" / "mitra-features.log").exists()
+
+
+def test_polyglot_generation_builds_all_ordered_pairs_plus_html_payload(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    mitra_dir = tmp_path / "mitra"
+    mitra_dir.mkdir()
+    fake_mitra = mitra_dir / "mitra.py"
+    fake_mitra.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "forced = False\n"
+        "if args and args[0] == '-f':\n"
+        "    forced = True\n"
+        "    args = args[1:]\n"
+        "assert forced\n"
+        "seed1 = Path(args[0])\n"
+        "seed2 = Path(args[1])\n"
+        "Path.cwd().joinpath('poly-result.bin').write_bytes(seed1.read_bytes() + seed2.read_bytes())\n",
+        encoding="utf-8",
+    )
+
+    result = run_cli(
+        "generate",
+        "--out",
+        str(out_dir),
+        "--category",
+        "polyglots",
+        "--mitra-path",
+        str(fake_mitra),
+    )
+    assert result.returncode == 0, result.stderr
+
+    expected_dirs = {
+        "pdf-jpg",
+        "pdf-jpeg",
+        "pdf-png",
+        "pdf-tiff",
+        "pdf-html",
+        "jpg-pdf",
+        "jpg-jpeg",
+        "jpg-png",
+        "jpg-tiff",
+        "jpg-html",
+        "jpeg-pdf",
+        "jpeg-jpg",
+        "jpeg-png",
+        "jpeg-tiff",
+        "jpeg-html",
+        "png-pdf",
+        "png-jpg",
+        "png-jpeg",
+        "png-tiff",
+        "png-html",
+        "tiff-pdf",
+        "tiff-jpg",
+        "tiff-jpeg",
+        "tiff-png",
+        "tiff-html",
+    }
+    actual_dirs = {path.name for path in (out_dir / "polyglots").iterdir() if path.is_dir() and path.name != "__pycache__"}
+    assert expected_dirs.issubset(actual_dirs)
+
+
+def test_polyglot_generation_cleans_empty_mitra_dirs_unless_debug(tmp_path: Path) -> None:
+    mitra_dir = tmp_path / "mitra"
+    mitra_dir.mkdir()
+    fake_mitra = mitra_dir / "mitra.py"
+    fake_mitra.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "if args and args[0] == '-f':\n"
+        "    args = args[1:]\n"
+        "# produce no output files on purpose\n",
+        encoding="utf-8",
+    )
+
+    out_clean = tmp_path / "out-clean"
+    result_clean = run_cli(
+        "generate",
+        "--out",
+        str(out_clean),
+        "--category",
+        "polyglots",
+        "--mitra-path",
+        str(fake_mitra),
+    )
+    assert result_clean.returncode == 0, result_clean.stderr
+    assert not (out_clean / "polyglots" / "pdf-jpg").exists()
+
+    out_debug = tmp_path / "out-debug"
+    result_debug = run_cli(
+        "generate",
+        "--out",
+        str(out_debug),
+        "--category",
+        "polyglots",
+        "--mitra-path",
+        str(fake_mitra),
+        "--debug",
+    )
+    assert result_debug.returncode == 0, result_debug.stderr
+    debug_pair_dir = out_debug / "polyglots" / "pdf-jpg"
+    assert debug_pair_dir.exists()
+    assert (debug_pair_dir / "mitra.log").exists()

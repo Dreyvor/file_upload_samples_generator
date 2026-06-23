@@ -8,6 +8,29 @@ from ..registry import FamilyRegistry
 from ..utils import ensure_within, sha256_bytes, utc_now, write_bytes, write_text
 
 
+def html_active_content_sample() -> str:
+    return "\n".join(
+        [
+            "<!DOCTYPE html>",
+            '<html lang="en">',
+            "<head>",
+            '  <meta charset="utf-8">',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+            "  <title>XSS and IFrame Sample</title>",
+            "</head>",
+            "<body>",
+            "  <h1>Upload Sample HTML Test</h1>",
+            "  <script>",
+            "    alert('XSS sample triggered');",
+            "  </script>",
+            '  <iframe src="about:blank" title="Sample iframe" width="420" height="240"></iframe>',
+            "</body>",
+            "</html>",
+            "",
+        ]
+    )
+
+
 def build_entry(
     *,
     config: GeneratorConfig,

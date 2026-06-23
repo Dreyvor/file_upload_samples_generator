@@ -9,7 +9,7 @@ from .generators import baseline, malformed, metadata, minimal_headers, mismatch
 from .manifest import load_manifest, write_manifest
 from .models import GeneratorConfig
 from .registry import FamilyRegistry
-from .reporting import export_report, init_reporting, run_report_ui, status_summary
+from .reporting import export_report, init_reporting, reset_reporting, run_report_ui, status_summary
 from .utils import sha256_file
 
 
@@ -113,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
             action="store_true",
             help="Initialize reporting scaffolding after sample generation finishes.",
         )
+        generate_parser.add_argument(
+            "--debug",
+            action="store_true",
+            help="Keep intermediate debugging artifacts such as empty Mitra pair directories that would otherwise be cleaned up.",
+        )
 
     generate_parser = subparsers.add_parser(
         "generate",
@@ -162,6 +167,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Create reporting/session.sqlite3 and reporting/ui assets from an existing manifest.json.",
     )
     report_init_parser.add_argument("--out", type=Path, required=True, help="Output directory containing an existing manifest.json file.")
+    report_init_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="WARNING: delete the current reporting SQLite database and rebuild it from manifest.json, losing saved reporting data.",
+    )
 
     report_ui_parser = subparsers.add_parser(
         "report-ui",
@@ -213,6 +223,7 @@ def config_from_args(args: argparse.Namespace, registry: FamilyRegistry) -> Gene
         format=args.format,
         mitra_path=args.mitra_path,
         init_reporting=args.init_reporting,
+        debug=args.debug,
     )
 
 
@@ -304,9 +315,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 
 def cmd_report_init(args: argparse.Namespace) -> int:
-    summary = init_reporting(args.out)
+    summary = reset_reporting(args.out) if args.reset else init_reporting(args.out)
     print(
-        f"initialized reporting in {args.out / 'reporting'} "
+        f"{'reset and initialized' if args.reset else 'initialized'} reporting in {args.out / 'reporting'} "
         f"(entries={summary['total_entries']}, new_results={summary['new_results']}, retired_entries={summary['retired_entries']})"
     )
     return 0

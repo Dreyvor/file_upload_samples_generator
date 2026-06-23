@@ -61,10 +61,10 @@ python -m upload_samples generate --out out --init-reporting
 - `malformed`: truncated and bounded malformed files
 - `metadata`: valid files and recipes with marker metadata
 - `filenames`: multipart filename recipe markdown
-- `multipart-recipes`: multipart `Content-Type` confusion recipes
+- `multipart-recipes`: multipart `Content-Type` confusion recipes plus an HTML/XSS/iframe helper sample
 - `stress-bounded`: safe resource-handling samples
 - `pdf-structures`: benign PDF structure indicators
-- `polyglots`: optional Mitra-driven generation
+- `polyglots`: optional Mitra-driven generation with ordered host/payload pairs and HTML forced-blob payloads
 
 ## Extensibility model
 
@@ -87,15 +87,54 @@ extension lists.
 
 ```bash
 python -m upload_samples generate --out out --category mismatch
+python -m upload_samples generate --out out --category polyglots --mitra-path ../mitra/mitra.py
+python -m upload_samples generate --out out --category polyglots --mitra-path ../mitra/mitra.py --debug
 python -m upload_samples generate --out out --family pdf --family png
 python -m upload_samples generate --out out --extension jpg --extension jpeg
 python -m upload_samples verify --out out
 python -m upload_samples report-init --out out
+python -m upload_samples report-init --out out --reset
 python -m upload_samples report-ui --out out --host 127.0.0.1 --port 8765
 python -m upload_samples report-status --out out
 python -m upload_samples report-export --out out
 python -m upload_samples list-categories
 python -m upload_samples list-families
+```
+
+## HTML and polyglot helpers
+
+- `multipart-recipes/xss-iframe-sample.html` is a simple active-content helper with an `<h1>`, a JavaScript `alert(...)`, and an `<iframe>`.
+- `mismatch/manual-html-content-as-<extension>.<extension>` stores that HTML content under allowed non-HTML extensions to test sniffing, unsafe preview, and inline serving behavior.
+- `polyglots/manual-html-seed.html` is used as the HTML payload seed for Mitra-driven polyglot attempts.
+
+## Mitra integration
+
+The polyglot generator uses Mitra as an optional external dependency.
+
+```bash
+python -m upload_samples generate \
+  --out out \
+  --category polyglots \
+  --mitra-path ../mitra/mitra.py
+```
+
+Current behavior:
+
+- each selected host extension is paired against every other selected extension plus `html`
+- same-extension pairs are skipped
+- Mitra is always called with `-f`, so file 2 is treated as a forced blob payload
+- Mitra-generated filenames are preserved exactly; the tool does not rename them
+- each pair directory gets `mitra.log` and, when files are produced, `mitra-features.log`
+- pair directories that contain only `mitra.log` are deleted automatically unless `--debug` is used
+
+Use `--debug` if you want to keep empty Mitra pair directories for troubleshooting:
+
+```bash
+python -m upload_samples generate \
+  --out out \
+  --category polyglots \
+  --mitra-path ../mitra/mitra.py \
+  --debug
 ```
 
 ## Reporting workflow
@@ -166,6 +205,8 @@ out/
   stress-bounded/
   pdf-structures/
   polyglots/
+    manual-html-seed.html
+    html-manual-test-notes.md
   reporting/
     session.sqlite3
     ui/
